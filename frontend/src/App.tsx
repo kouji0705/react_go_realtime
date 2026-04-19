@@ -1,38 +1,61 @@
 import { useEffect, useState } from 'react'
 
+type Message = {
+  text: string
+  time: string
+}
+
 function App() {
-  const [messages, setMessages] = useState<string[]>([])
+  const [messages, setMessages] = useState<Message[]>([])
+  const [inputText, setInputText] = useState('')
 
   useEffect(() => {
-    // 1. Goのサーバー（8080番）にSSE接続を開始
     const eventSource = new EventSource('http://localhost:8080/events')
 
-    // 2. サーバーからメッセージが届いた時の処理
     eventSource.onmessage = (event) => {
-      // event.data にサーバーからの文字列が入っている
-      console.log('New message:', event.data)
-      setMessages((prev) => [...prev, event.data])
+      const newMessage = JSON.parse(event.data) as Message
+      setMessages((prev) => [...prev, newMessage])
     }
 
-    // 3. エラー（サーバーダウンなど）の処理
-    eventSource.onerror = (err) => {
-      console.error('SSE Error:', err)
-    }
-
-    // 4. クリーンアップ：コンポーネントがアンマウントされたら接続を閉じる
-    return () => {
-      eventSource.close()
-    }
+    return () => eventSource.close()
   }, [])
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!inputText) return
+
+    // メッセージをPOST送信（これ自体はただのHTTPリクエスト）
+    await fetch('http://localhost:8080/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: inputText }),
+    })
+
+    setInputText('')
+  }
+
   return (
-    <div>
-      <h1>SSE Receiver (Step 2)</h1>
-      <ul>
-        {messages.map((msg, i) => (
-          <li key={i}>{msg}</li>
+    <div style={{ padding: '20px' }}>
+      <h1>SSE Chat Room</h1>
+      
+      {/* 送信フォーム */}
+      <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
+        <input 
+          value={inputText} 
+          onChange={(e) => setInputText(e.target.value)} 
+          placeholder="メッセージを入力..."
+        />
+        <button type="submit">送信</button>
+      </form>
+
+      {/* メッセージリスト */}
+      <div style={{ border: '1px solid #ccc', height: '300px', overflowY: 'scroll' }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ padding: '5px 10px' }}>
+            <strong>[{m.time}]</strong> {m.text}
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   )
 }
